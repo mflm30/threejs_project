@@ -5,19 +5,21 @@ var renderer;
 var scene;
 var camera;
 var controls;
+var control;
 var has_bullet = 0;
-
+var plane;
+var sceneBG;
+var cameraBG;
+var composer;
 var cube1, cube2, cube3;
 var bullet;
-var roof = 20;
-
+var roof = 30;
+var level = 1;
+var record = 1;
+var textMesh;
 var Invader = [];
 var has_invader = false;
 var Fire = [];
-
-// Background
-var sceneBG;
-var cameraBG;
 
 function init() {
   sceneBG = new THREE.Scene();
@@ -28,16 +30,63 @@ function init() {
   //renderer.shadowMapEnabled = true;
 
   camera = new THREE.PerspectiveCamera(45, winWidth/winHeight, 0.1, 1000);
-  document.body.appendChild(renderer.domElement);
-  camera.position.z = 50;
+  camera.position.z = 80;
   camera.position.y = 30;
-  controls = new THREE.OrbitControls(camera);
-  objects();
-  render();
-
-  // segunda camera
+  // camera para olhar para o bg
   cameraBG = new THREE.OrthographicCamera(-winWidth,winWidth,winHeight,-winHeight,-10000,10000);
   cameraBG.position.z = 50;
+  control = new THREE.OrbitControls(camera);
+  controls = new function() {
+    this.rotationSpeed = 0.001
+  };
+
+  addControlGui(controls);
+
+  // render passes
+  var bgPass = new THREE.RenderPass(sceneBG, cameraBG);
+  var renderPass = new THREE.RenderPass(scene, camera);
+  renderPass.clear = false;
+  var effectCopy = new THREE.ShaderPass(THREE.CopyShader);
+  effectCopy.renderToScreen = true;
+
+  composer = new THREE.EffectComposer(renderer);
+  composer.addPass(bgPass);
+  composer.addPass(renderPass);
+  composer.addPass(effectCopy);
+
+  objects();
+  //lights();
+
+  document.body.appendChild(renderer.domElement);
+  render();
+}
+
+function name(nivel){
+  scene.remove(textMesh);
+  var string = "Level : " + nivel + " !!";
+  console.log("debug: " + string);
+  var textMat = new THREE.MeshBasicMaterial({color: 0xff0000});
+  var textGeom = new THREE.TextGeometry( string, { size: 1, height: 0.5, curveSegments: 6,
+        font: '2015 Cruiser' // Must be lowercase!
+    });
+  textMesh = new THREE.Mesh( textGeom, textMat );
+  textMesh.position.x = -45;
+  textMesh.position.y = 30;
+  scene.add( textMesh );
+}
+
+function gameover(){
+  scene.remove(textMesh);
+  var string = "GAME  OVER !!                                                                           RECORD: " + record + " :D";
+  console.log("debug: " + string);
+  var textMat = new THREE.MeshBasicMaterial({color: 0xff0000});
+  var textGeom = new THREE.TextGeometry( string, { size: 1, height: 0.5, curveSegments: 6,
+        font: '2015 Cruiser' // Must be lowercase!
+    });
+  textMesh = new THREE.Mesh( textGeom, textMat );
+  textMesh.position.x = -45;
+  textMesh.position.y = 30;
+  scene.add( textMesh );
 }
 
 function invader(){
@@ -115,33 +164,31 @@ function invader(){
 
   scene.add(Invader);
 
-  var bgPass = new THREE.RenderPass(sceneBG, cameraBG);
-  var composer = new THREE.EffectComposer(renderer);
-  composer.addPass(bgPass);
 }
 var Invader;
 function objects() {
-  // Plano
-  var PlaneGeometry = new THREE.PlaneGeometry(100, 60);
-  var PlaneMaterial = new THREE.MeshNormalMaterial({});
-  var plane = new THREE.Mesh(PlaneGeometry, PlaneMaterial);
-  plane.rotation.x = -Math.PI/2;
-  //plane.position.y -= 5;
-  scene.add(plane);
-
-  // adicionando o plano de fundo
-  var materialColor = new THREE.MeshBasicMaterial({
-    map: THREE.ImageUtils.loadTexture ("assets/textures/planets/starry_background.jpg"), depthTest: false
-  });
-  var bgPlane = new THREE.Mesh(new THREE.PlaneGeometry(1, 1), materialColor);
-  bgPlane.position.z = -100;
-  bgPlane.scale.set(winWidth * 2, winHeight * 2, 1);
-  sceneBG.add(bgPlane);
 
   var cube1Geo = new THREE.CubeGeometry(1.6, 0.75, 1);
   var cubeMat = new THREE.MeshNormalMaterial();
   var cube2Geo = new THREE.CubeGeometry(1.3, 0.55, 1);
   var cube3Geo = new THREE.CubeGeometry(0.4, 0.4, 0.4);
+  /*
+  var planeGeo = new THREE.PlaneGeometry(100, 100, 100);
+  var planeMat = new THREE.MeshBasicMaterial({color: 0x808080});
+  plane = new THREE.Mesh(planeGeo, planeMat);
+  plane.rotation.x = -Math.PI/2;
+  scene.add(plane);
+  /*
+  Plano com textura
+  */
+  var earthGeometry = new THREE.PlaneGeometry(100, 100, 100);
+  var sphereMaterial = new THREE.MeshBasicMaterial({
+    map: THREE.ImageUtils.loadTexture("assets/textures/planets/earthmap4k.jpg"), 
+  });
+  plane = new THREE.Mesh(earthGeometry, sphereMaterial);
+  plane.rotation.x = -Math.PI/2;
+  scene.add(plane);
+
 
   cube1 = new THREE.Mesh(cube1Geo, cubeMat);
   cube1.position.x = 0;
@@ -156,8 +203,34 @@ function objects() {
   scene.add(cube3);
   invader();
   Invader.position.y = roof;  
+
+  name(level);
+
+  // Background
+  var materialColor = new THREE.MeshBasicMaterial({ 
+    map: THREE.ImageUtils.loadTexture ("assets/textures/planets/starry_background.jpg"), 
+    depthTest: false,
+    side: THREE.DoubleSide
+  });
+  var bgPlane = new THREE.Mesh(new THREE.PlaneGeometry(1, 1), materialColor);
+  bgPlane.position.z = -100;
+  bgPlane.scale.set(winWidth * 2, winHeight * 2, 1);
+
+  sceneBG.add(bgPlane);
 }
 
+function dist(x1, y1, x2, y2){
+  var xs = 0;
+  var ys = 0;
+ 
+  xs = x2 - x1;
+  xs = xs * xs;
+ 
+  ys = y2 - y1;
+  ys = ys * ys;
+ 
+  return Math.sqrt( xs + ys );
+}
 
 function move_left(){
   cube1.position.x -= 0.2;
@@ -171,56 +244,97 @@ function move_right(){
   cube3.position.x += 0.2;
 }
 
-var bulletGeo= new THREE.CubeGeometry(0.1, 0.2, 0.1);
-var bulletMat= new THREE.MeshNormalMaterial();
-var Bullet = function(){
-  var bullet = new THREE.Mesh(bulletGeo, bulletMat);
-  return {
-    tiro: function(){
-      bullet.position.x = cube3.position.x;
-      bullet.position.y = cube3.position.y + 0.5;
-      bullet.position.z = cube1.position.z; 
-      has_bullet = true;
-      return bullet;
-    }
-  };
+
+function Bullet() {
+  var bulletGeo = new THREE.CubeGeometry(0.1, 0.2, 0.1);
+  var bulletMat = new THREE.MeshNormalMaterial();
+  bullet = new THREE.Mesh(bulletGeo, bulletMat);
+  bullet.position.x = cube3.position.x;
+  bullet.position.y = cube3.position.y + 0.5;
+  bullet.position.z = cube1.position.z; 
+
+  has_bullet = true;
+  return bullet;  
+  
 }
 
-var i = 0;
+var inv_x = 0;
+var inv_y = 0.01;
+
+function updateInvader(){
+  Invader.position.x = 20 * Math.sin(inv_x);
+  inv_x += 0.01;
+  Invader.position.y -= inv_y;
+
+  if(Invader.position.y < 0){
+    console.log("GAME OVER!!");
+    console.log("RECORD: " + record);
+    gameover();
+    level = 1;
+    Invader.position.y = roof;
+    inv_y = 0.01;
+  }
+
+}
+
 function updateCube() {
-  //cube3.rotation.x += 0.1;
+  
   cube3.rotation.y += 0.1;
-  Invader.position.x =20 * Math.sin(i);
-  i+= 0.01;
+  
   if(Key.isDown(Key.A)){
     move_left();
-  }else if(Key.isDown(Key.D)){
+  }if(Key.isDown(Key.D)){
     move_right();
-  }else if(Key.isDown(Key.SPACE)){
-    var trintaeoito = new Bullet();
-    var gina = trintaeoito.tiro();
-    scene.add(gina);
-    Fire.push(gina);
+  }if(Key.isDown(Key.SPACE) || Key.isDown(Key.W)){
+    bullet = Bullet();
+    scene.add(bullet);
+    Fire.push(bullet);;
+  
+  }
+}
+
+function hit(){
+  Invader.position.y = roof;
+  inv_y = inv_y * 1.1;
+  for(var x = 0; x < Fire.length; x++){
+    scene.remove(Fire.shift());
   }
 }
 
 function update_bullet(){
   for(var x = 0; x < Fire.length; x++){
-    if(Fire[x].position.y < roof ) Fire[x].position.y += 0.1;
+    if(Fire[x].position.y < roof ) {
+      Fire[x].position.y += 0.1;
+      if(dist(Invader.position.x, Invader.position.y, Fire[x].position.x, Fire[x].position.y) < 3){
+        //console.log("BATEU");
+        console.log("LEVEL " + ++level);
+        name(level);
+        if(level > record) record = level;
+        hit();
+      }
+    } 
     else{
-      scene.remove(Fire.pop());
+      scene.remove(Fire[0]);
+      Fire.shift();
     }
   }
   
 }
 
+function addControlGui(controlObject) {
+    var gui = new dat.GUI();
+    gui.add(controlObject, 'rotationSpeed', -0.01, 0.01);
+}
+
 function render() {
   requestAnimationFrame(render); // sets up the render loop
   updateCube();
-  controls.update();
+  control.update();
   update_bullet();
+  updateInvader();
+  composer.render();
   renderer.render(scene, camera);
-
+  renderer.autoClear = false;
 }
 
 window.onload = init;
